@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Valentine Surprise</title>
+    <!-- React and Babel CDN -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Framer Motion -->
+    <script src="https://unpkg.com/framer-motion@10.16.4/dist/framer-motion.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Sacramento&display=swap');
+        
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Nunito', sans-serif;
+            background: #ffe6e9;
+            user-select: none;
+        }
+
+        .font-script { font-family: 'Sacramento', cursive; }
+        .perspective-1000 { perspective: 1000px; }
+        .preserve-3d { transform-style: preserve-3d; }
+        .backface-hidden { backface-visibility: hidden; }
+        
+        @keyframes float-balloon {
+            0% { transform: translateY(100vh) rotate(0deg); opacity: 1; }
+            100% { transform: translateY(-20vh) rotate(20deg); opacity: 0; }
+        }
+        .balloon {
+            position: absolute;
+            bottom: -100px;
+            animation: float-balloon 4s ease-in forwards;
+            z-index: 50;
+        }
+
+        .receipt-edge {
+            background-image: linear-gradient(135deg, transparent 75%, #fff 75%), linear-gradient(225deg, transparent 75%, #fff 75%);
+            background-position: 0 0;
+            background-repeat: repeat-x;
+            background-size: 10px 10px;
+            height: 10px;
+            width: 100%;
+            position: absolute;
+            bottom: -10px;
+            left: 0;
+        }
+
+        .receipt-barcode {
+            height: 30px;
+            width: 100%;
+            background: repeating-linear-gradient(90deg, #333, #333 1px, transparent 1px, transparent 4px);
+            opacity: 0.3;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+        const { motion, AnimatePresence } = window.Motion;
+
+        /* --- SVG ICONS (Reliable Fallback) --- */
+        const HeartIcon = ({ className }) => (
+            <svg viewBox="0 0 24 24" fill="currentColor" className={className} stroke="none"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+        );
+
+        /* --- BACKGROUND CANVAS --- */
+        const BackgroundCanvas = ({ mode = 'normal' }) => {
+            const canvasRef = useRef(null);
+
+            useEffect(() => {
+                const canvas = canvasRef.current;
+                const ctx = canvas.getContext('2d');
+                let animationFrameId;
+                let particles = [];
+
+                const resize = () => {
+                    canvas.width = window.innerWidth;
+                    canvas.height = window.innerHeight;
+                };
+                window.addEventListener('resize', resize);
+                resize();
+
+                class Particle {
+                    constructor(isConfetti = false) {
+                        this.isConfetti = isConfetti;
+                        this.reset();
+                    }
+                    reset() {
+                        this.x = Math.random() * canvas.width;
+                        this.y = this.isConfetti ? canvas.height + 10 : Math.random() * canvas.height - canvas.height;
+                        this.size = Math.random() * (this.isConfetti ? 8 : 10) + 4;
+                        this.speedY = this.isConfetti ? -(Math.random() * 12 + 8) : Math.random() * 2 + 1;
+                        this.speedX = Math.random() * 6 - 3;
+                        this.rotation = Math.random() * 360;
+                        this.color = this.isConfetti 
+                            ? ['#ff4d6d', '#ffbc42', '#a06cd5', '#4cc9f0', '#ff006e'][Math.floor(Math.random() * 5)]
+                            : ['#ffc2d1', '#ffe5ec', '#ffb3c1'][Math.floor(Math.random() * 3)];
+                        this.opacity = 1;
+                        this.gravity = this.isConfetti ? 0.25 : 0;
+                    }
+                    update() {
+                        this.y += this.speedY;
+                        this.x += this.speedX;
+                        if (this.isConfetti) {
+                            this.speedY += this.gravity;
+                            this.opacity -= 0.005;
+                        }
+                        this.rotation += 2;
+                        if (this.y > canvas.height && !this.isConfetti) this.reset();
+                    }
+                    draw() {
+                        ctx.save();
+                        ctx.globalAlpha = this.opacity;
+                        ctx.translate(this.x, this.y);
+                        ctx.rotate((this.rotation * Math.PI) / 180);
+                        ctx.fillStyle = this.color;
+                        if (this.isConfetti) {
+                            ctx.fillRect(-this.size/2, -this.size/2, this.size, this.size);
+                        } else {
+                            ctx.beginPath();
+                            ctx.ellipse(0, 0, this.size, this.size/1.5, 0, 0, Math.PI * 2);
+                            ctx.fill();
+                        }
+                        ctx.restore();
+                    }
+                }
+
+                const count = mode === 'party' ? 150 : 50;
+                for (let i = 0; i < count; i++) particles.push(new Particle(mode === 'party'));
+                
+                const animate = () => {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    particles.forEach(p => {
+                        p.update();
+                        p.draw();
+                    });
+                    animationFrameId = requestAnimationFrame(animate);
+                };
+                animate();
+                return () => {
+                    window.removeEventListener('resize', resize);
+                    cancelAnimationFrame(animationFrameId);
+                };
+            }, [mode]);
+
+            return <canvas ref={canvasRef} className="fixed inset-0 pointer-events-none z-0" />;
+        };
+
+        const HeartScreen = ({ onNext }) => (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col items-center justify-center h-full z-10 relative">
+                <h1 className="font-script text-6xl text-[#ff4d6d] mb-12">Just for you</h1>
+                <motion.button whileTap={{ scale: 0.9 }} onClick={onNext} className="relative cursor-pointer">
+                    <div className="w-32 h-32 bg-white rounded-full flex items-center justify-center shadow-xl relative z-10">
+                        <motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ repeat: Infinity, duration: 1.2 }}>
+                            <HeartIcon className="text-[#ff4d6d] w-14 h-14" />
+                        </motion.div>
+                    </div>
+                    <motion.div className="absolute inset-0 bg-[#ff4d6d] rounded-full -z-10" animate={{ scale: [1, 1.8], opacity: [0.5, 0] }} transition={{ repeat: Infinity, duration: 1.5 }} />
+                </motion.button>
+                <p className="mt-8 text-[#ff4d6d] font-bold text-sm tracking-widest uppercase animate-pulse">Tap to open</p>
+            </motion.div>
+        );
+
+        const ScannerScreen = ({ onNext }) => {
+            const [text, setText] = useState("Initializing Radar...");
+            useEffect(() => {
+                const timeouts = [
+                    setTimeout(() => setText("Detecting Sweetness..."), 1500),
+                    setTimeout(() => setText("Analyzing Soul..."), 3000),
+                    setTimeout(() => { setText("Match Found: 100%"); setTimeout(onNext, 1200); }, 4500),
+                ];
+                return () => timeouts.forEach(clearTimeout);
+            }, [onNext]);
+
+            return (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col items-center justify-center h-full z-10 relative w-full">
+                    <div className="relative w-72 h-72 flex items-center justify-center rounded-full border-[6px] border-white/50 bg-white/10 shadow-inner overflow-hidden">
+                        <div className="absolute inset-4 border border-white/20 rounded-full" />
+                        <div className="absolute inset-12 border border-white/20 rounded-full" />
+                        <div className="absolute inset-20 border border-white/20 rounded-full" />
+                        
+                        {/* Rotating Scanner Rod and Sweep */}
+                        <motion.div 
+                            className="absolute inset-0 origin-center z-20"
+                            animate={{ rotate: 360 }}
+                            transition={{ duration: 2.5, repeat: Infinity, ease: "linear" }}
+                        >
+                            {/* The Sweep Gradient */}
+                            <div 
+                                className="absolute inset-0 opacity-40"
+                                style={{ 
+                                    background: 'conic-gradient(from 270deg, #ff4d6d 0deg, transparent 90deg)'
+                                }}
+                            />
+                            {/* The Physical Rod Line */}
+                            <div className="absolute top-0 left-1/2 w-[3px] h-1/2 bg-white shadow-[0_0_15px_rgba(255,255,255,0.8)] -translate-x-1/2" />
+                        </motion.div>
+
+                        <motion.div 
+                            animate={{ scale: [1, 1.1, 1], opacity: [0.7, 1, 0.7] }}
+                            transition={{ duration: 1, repeat: Infinity }}
+                        >
+                            <HeartIcon className="text-[#ff4d6d] z-10 drop-shadow-[0_0_10px_rgba(255,77,109,0.5)] w-20 h-20" />
+                        </motion.div>
+                    </div>
+                    <motion.p key={text} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-10 text-2xl font-black text-[#ff4d6d] tracking-tight">{text}</motion.p>
+                </motion.div>
+            );
+        };
+
+        const ReceiptScreen = ({ onNext }) => (
+            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="flex flex-col items-center justify-center h-full z-10 p-6">
+                <div className="bg-white rounded-t-lg p-8 shadow-xl w-full max-w-xs relative border-x-4 border-t-4 border-pink-50 text-center">
+                    <div className="flex flex-col items-center mb-6">
+                         <div className="text-pink-400 font-black border-2 border-pink-400 w-8 h-8 flex items-center justify-center mb-4">$</div>
+                         <h2 className="font-black text-gray-800 tracking-[0.2em] text-sm uppercase">Official Report</h2>
+                         <p className="text-[10px] text-gray-400 mt-1">14 FEB 2026</p>
+                    </div>
+                    <div className="space-y-4 mb-8 text-[10px] font-black uppercase text-left">
+                        <div className="flex justify-between border-b border-gray-50 pb-1"><span>ITEM:</span> <span className="text-gray-800">YOU</span></div>
+                        <div className="flex justify-between border-b border-gray-50 pb-1"><span>CUTENESS:</span> <span className="text-gray-800">UNLIMITED</span></div>
+                        <div className="flex justify-between border-b border-gray-50 pb-1"><span>SWEETNESS:</span> <span className="text-gray-800">OVERLOAD</span></div>
+                    </div>
+                    <div className="border-t-2 border-dashed border-gray-100 py-6 mb-2">
+                         <div className="flex justify-between items-center font-black text-pink-500">
+                           <span className="text-xs tracking-widest uppercase">Total:</span>
+                           <span className="text-sm">100% LOVELY</span>
+                         </div>
+                    </div>
+                    <div className="receipt-barcode mb-4" />
+                    <div className="receipt-edge" />
+                </div>
+                <motion.button whileTap={{ scale: 0.95 }} onClick={onNext} className="mt-14 bg-[#ff4d6d] text-white px-10 py-4 rounded-full font-black shadow-lg flex items-center gap-3"> 
+                    CONTINUE ➔
+                </motion.button> 
+            </motion.div>
+        );
+
+        const LetterScreen = ({ onNext }) => (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center h-full z-10 px-6">
+                <motion.div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl p-8 relative" initial={{ y: 50 }} animate={{ y: 0 }}>
+                    <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-[#ff4d6d] p-3 rounded-full shadow-lg">
+                        <span className="text-white text-2xl">✉</span>
+                    </div>
+                    <h2 className="font-script text-4xl text-[#ff4d6d] text-center mt-4 mb-6">A little note...</h2>
+                    <div className="text-gray-600 leading-relaxed text-sm space-y-4 italic">
+                        <p>Every day with you feels like a beautiful celebration.</p>
+                        <p>I wanted to take a moment to tell you how much you mean to me.</p>
+                        <p>You make the world better just by being in it.</p>
+                    </div>
+                    <div className="mt-8 pt-6 border-t border-pink-50 flex justify-between items-end">
+                        <div>
+                            <p className="text-[10px] text-gray-400 uppercase font-black tracking-widest">From</p>
+                            <p className="font-script text-2xl text-[#ff4d6d]">Your Valentine</p>
+                        </div>
+                        <motion.button whileTap={{ scale: 0.95 }} onClick={onNext} className="bg-[#ff4d6d] text-white p-3 w-10 h-10 rounded-full shadow-lg flex items-center justify-center">
+                            ➔
+                        </motion.button>
+                    </div>
+                </motion.div>
+            </motion.div>
+        );
+
+        const FlipCard = ({ color, emoji, text }) => {
+            const [flipped, setFlipped] = useState(false);
+            return (
+                <div className="h-44 w-36 perspective-1000 cursor-pointer" onClick={() => setFlipped(!flipped)}>
+                    <motion.div className="w-full h-full relative preserve-3d" animate={{ rotateY: flipped ? 180 : 0 }} transition={{ duration: 0.6, type: "spring", stiffness: 260, damping: 20 }}>
+                        <div className="absolute inset-0 backface-hidden rounded-2xl shadow-lg flex items-center justify-center text-5xl border-4 border-white" style={{ backgroundColor: color }}>
+                            {emoji}
+                        </div>
+                        <div className="absolute inset-0 backface-hidden rounded-2xl bg-white shadow-lg p-4 flex items-center justify-center text-center border-2" 
+                             style={{ borderColor: color, transform: 'rotateY(180deg)' }}>
+                            <p className="text-[10px] font-black text-gray-700 leading-tight uppercase">{text}</p>
+                        </div>
+                    </motion.div>
+                </div>
+            );
+        };
+
+        const CardsScreen = ({ onNext }) => {
+            const cards = [
+                { color: '#ffbc42', emoji: '😊', text: 'You make simplicity extraordinary.' },
+                { color: '#a06cd5', emoji: '😍', text: 'I love how you see the world.' },
+                { color: '#ff4d6d', emoji: '😄', text: 'Your laugh is my favorite song.' }
+            ];
+            return (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center h-full z-10 px-4">
+                    <h1 className="font-script text-5xl text-[#ff4d6d] mb-4">Why you?</h1>
+                    <div className="flex flex-wrap justify-center gap-4 mb-12">
+                        {cards.map((c, i) => <FlipCard key={i} {...c} />)}
+                    </div>
+                    <button onClick={onNext} className="bg-[#ff4d6d] text-white px-10 py-4 rounded-full font-black shadow-lg uppercase text-sm">Next</button>
+                </motion.div>
+            );
+        };
+
+        const ValentineScreen = ({ onNext }) => {
+            const [accepted, setAccepted] = useState(false);
+            const [noScale, setNoScale] = useState(1);
+            const [yesScale, setYesScale] = useState(1);
+            const [balloons, setBalloons] = useState([]);
+
+            const handleNo = () => {
+                setNoScale(prev => Math.max(0, prev - 0.2));
+                setYesScale(prev => prev + 0.35);
+            };
+
+            const handleYes = () => {
+                setAccepted(true);
+                const newBalloons = Array.from({ length: 25 }).map((_, i) => ({
+                    id: Date.now() + i,
+                    left: Math.random() * 95 + '%',
+                    delay: Math.random() * 2 + 's',
+                    color: ['#ff4d6d', '#ffbc42', '#a06cd5', '#4cc9f0'][Math.floor(Math.random() * 4)]
+                }));
+                setBalloons(newBalloons);
+                onNext('yes');
+            };
+
+            return (
+                <div className="flex flex-col items-center justify-center h-full z-10 relative w-full text-center px-6">
+                    {balloons.map(b => (
+                        <div key={b.id} className="balloon text-4xl" style={{ left: b.left, animationDelay: b.delay, color: b.color }}>🎈</div>
+                    ))}
+                    {!accepted ? (
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                            <img src="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExOHp1eHRxZnc1eDNuZWg0eHpxeHpxeHpxeHpxeHpxeHpxeHpxZSZlcD12MV9zdGlja2Vycy9naWZzJmN0PXM/cLS1cfxvGOPVpf9g3y/giphy.gif" className="w-48 h-48 mx-auto mb-8" />
+                            <h1 className="font-script text-5xl text-[#ff4d6d] mb-12">Will you be my Valentine?</h1>
+                            <div className="flex items-center justify-center gap-6">
+                                <motion.button animate={{ scale: yesScale }} onClick={handleYes} className="bg-[#ff4d6d] text-white px-12 py-4 rounded-full font-black shadow-xl text-xl transition-all duration-300">YES!</motion.button>
+                                {noScale > 0.1 && (
+                                    <motion.button animate={{ scale: noScale }} onMouseEnter={handleNo} onClick={handleNo} className="bg-gray-200 text-gray-500 px-8 py-4 rounded-full font-black">No</motion.button>
+                                )}
+                            </div>
+                        </motion.div>
+                    ) : (
+                        <motion.div initial={{ scale: 0.5 }} animate={{ scale: 1 }} className="flex flex-col items-center">
+                            <div className="mb-8 p-6 bg-[#ff4d6d] rounded-xl shadow-2xl">
+                                <div className="text-6xl">💍</div>
+                            </div>
+                            <h1 className="font-script text-7xl text-[#ff4d6d] mb-4">Yay! ❤️</h1>
+                            <button onClick={() => onNext('finale')} className="mt-12 bg-[#ff4d6d] text-white px-8 py-3 rounded-full font-bold">Finish ✨</button>
+                        </motion.div>
+                    )}
+                </div>
+            );
+        };
+
+        function App() {
+            const [step, setStep] = useState(0);
+            const [partyMode, setPartyMode] = useState(false);
+
+            const updateStep = (val) => {
+                if (val === 'yes') setPartyMode(true);
+                else if (val === 'finale') setStep(6);
+                else if (val === 'reset') { setStep(0); setPartyMode(false); }
+                else setStep(prev => prev + 1);
+            };
+
+            return (
+                <div className="h-screen w-full bg-gradient-to-t from-[#fff0f3] to-[#ffe6e9] flex items-center justify-center overflow-hidden">
+                    <BackgroundCanvas mode={partyMode ? 'party' : 'normal'} />
+                    <div className="w-full h-full max-w-md relative flex flex-col">
+                        <AnimatePresence mode="wait">
+                            {step === 0 && <HeartScreen key="s0" onNext={() => updateStep()} />}
+                            {step === 1 && <ScannerScreen key="s1" onNext={() => updateStep()} />}
+                            {step === 2 && <ReceiptScreen key="s2" onNext={() => updateStep()} />}
+                            {step === 3 && <LetterScreen key="s3" onNext={() => updateStep()} />}
+                            {step === 4 && <CardsScreen key="s4" onNext={() => updateStep()} />}
+                            {step === 5 && <ValentineScreen key="s5" onNext={updateStep} />}
+                            {step >= 6 && (
+                                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center h-full z-10 text-center px-4">
+                                    <h1 className="font-script text-7xl text-[#ff4d6d] mb-4">Happy Valentine's!</h1>
+                                    <p className="font-black text-gray-500 uppercase tracking-widest text-sm mb-12">Forever & Always ❤️</p>
+                                    <button onClick={() => updateStep('reset')} className="flex items-center gap-2 text-gray-400 hover:text-[#ff4d6d] transition-colors font-bold uppercase text-[10px] tracking-widest">
+                                        ↻ Start Over
+                                    </button>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
